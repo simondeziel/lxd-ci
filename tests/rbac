@@ -157,7 +157,7 @@ echo "==> Validate exec permissions"
 lxc exec a1 true --project test-admin
 lxc exec a2 true --project test-operator
 lxc exec a3 true --project test-user
-#! lxc exec a4 true --project test-auditor || false
+! lxc exec a4 true --project test-auditor || false
 
 # Validate snapshot permissions
 echo "==> Validate snapshot permissions"
