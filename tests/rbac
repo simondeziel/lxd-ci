@@ -123,8 +123,8 @@ lxc launch images:alpine/edge a3 --project test-user
 lxc launch images:alpine/edge a4 --project test-auditor
 
 echo "==> Configuring rbac-user for access to projects"
-bhttp --raw --agent /var/snap/bhttp/common/rbac-test.admin https://services.monstermunchkin.dev/rbac/api/rbac/v1/resource > resources.json
-bhttp --raw --agent /var/snap/bhttp/common/rbac-test.admin https://services.monstermunchkin.dev/rbac/api/rbac/v1/user > user.json
+bhttp --raw --agent /var/snap/bhttp/common/rbac-test.admin https://services.monstermunchkin.dev/rbac/api/rbac/v1/resource | cat > resources.json
+bhttp --raw --agent /var/snap/bhttp/common/rbac-test.admin https://services.monstermunchkin.dev/rbac/api/rbac/v1/user | cat > user.json
 i=1
 USER_REF="$(jq -r '.[] | select(.name=="user") | .["$uri"]' < user.json)"
 for role in admin operator user auditor; do
