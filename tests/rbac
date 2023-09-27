@@ -55,9 +55,8 @@ lxc config set rbac.api.key 4BG3ukH0XFbskFH15Se11C4K0ENBiO4fxc917R0yJRo
 lxc config set rbac.api.url https://services.monstermunchkin.dev/rbac
 lxc config set core.https_address :8443
 
-# Setup remote
-(
-cat << EOF
+# Setup remotes
+cat << EOF > ~/snap/lxd/common/config/config.yml
 default-remote: local
 remotes:
   images:
@@ -81,7 +80,6 @@ remotes:
     public: false
 aliases: {}
 EOF
-) > ~/snap/lxd/common/config/config.yml
 mkdir -p ~/snap/lxd/common/config/jars/
 
 mkdir -p ~/snap/lxd/common/config/servercerts/
