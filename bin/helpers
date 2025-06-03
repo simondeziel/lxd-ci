@@ -4,7 +4,7 @@
 # Optional argument: timeout in seconds, defaults to 60.
 waitSnapdSeed() (
   { set +x; } 2>/dev/null
-  waitSecs="${1:-60}"
+  local waitSecs="${1:-60}"
   if timeout "${waitSecs}" snap wait system seed.loaded; then
     return 0 # Success.
   fi
@@ -15,16 +15,16 @@ waitSnapdSeed() (
 # waitInstanceReady: waits for the instance to be ready (processes count > 1).
 waitInstanceReady() (
   { set +x; } 2>/dev/null
-  maxWait="${MAX_WAIT_SECONDS:-120}"
-  instName="${1}"
-  instProj="${2:-}"
+  local maxWait="${MAX_WAIT_SECONDS:-120}"
+  local instName="${1}"
+  local instProj="${2:-}"
   if [ -z "${instProj}" ]; then
     # Find the currently selected project.
     instProj="$(lxc project list -f csv | sed -n 's/^\([^(]\+\) (current),.*/\1/ p')"
   fi
 
   # Wait for the instance to report more than one process.
-  processes=0
+  local processes=0
   for _ in $(seq "${maxWait}"); do
       processes="$(lxc info --project "${instProj}" "${instName}" | awk '{if ($1 == "Processes:") print $2}')"
       if [ "${processes:-0}" -ge "${MIN_PROC_COUNT:-2}" ]; then
@@ -40,13 +40,13 @@ waitInstanceReady() (
 # waitInstanceBooted: waits for the instance to be ready and fully booted.
 waitInstanceBooted() (
   { set +x; } 2>/dev/null
-  prefix="::warning::"
+  local prefix="::warning::"
   if [ "${WARNING_PREFIX:-}" = "false" ]; then
     prefix=""
   fi
-  maxWait=90
-  instName="$1"
-  instProj="${2:-}"
+  local maxWait=90
+  local instName="$1"
+  local instProj="${2:-}"
   if [ -z "${instProj}" ]; then
     # Find the currently selected project.
     instProj="$(lxc project list -f csv | sed -n 's/^\([^(]\+\) (current),.*/\1/ p')"
@@ -57,8 +57,8 @@ waitInstanceBooted() (
 
   # Then wait for the boot sequence to complete.
   sleep 1
-  rc=0
-  state="$(lxc exec --project "${instProj}" "${instName}" -- timeout "${maxWait}" systemctl is-system-running --wait)" || rc="$?"
+  local rc=0
+  local state="$(lxc exec --project "${instProj}" "${instName}" -- timeout "${maxWait}" systemctl is-system-running --wait)" || rc="$?"
 
   # rc=124 is when `timeout` is hit.
   # Other rc values are ignored as it doesn't matter if the system is fully
@@ -78,8 +78,8 @@ waitInstanceBooted() (
 # ==> Returns 1 if systemd state is clean (no failure), 1 otherwise.
 isSystemdClean() (
   { set +x; } 2>/dev/null
-  instName="$1"
-  instProj="${2:-}"
+  local instName="$1"
+  local instProj="${2:-}"
   if [ -z "${instProj}" ]; then
     # Find the currently selected project.
     instProj="$(lxc project list -f csv | sed -n 's/^\([^(]\+\) (current),.*/\1/ p')"
@@ -101,8 +101,8 @@ isSystemdClean() (
 # enableNICSRIOV: enable SR-IOV on a NIC.
 enableNICSRIOV() (
   { set +x; } 2>/dev/null
-  parentNIC="${1}"
-  numVFS="${2:-"7"}"
+  local parentNIC="${1}"
+  local numVFS="${2:-"7"}"
 
   if ! [ -d "/sys/class/net/${parentNIC}" ]; then
       echo "${parentNIC} is not present, wrong name?"
@@ -123,9 +123,9 @@ enableNICSRIOV() (
 # install_deps: install dependencies if needed.
 install_deps() (
     { set +x; } 2>/dev/null
-    PKGS="${*}"
-    missing=""
-    PKGS_LIST="$(dpkg --get-selections | awk '{print $1}')"
+    local PKGS="${*}"
+    local missing=""
+    local PKGS_LIST="$(dpkg --get-selections | awk '{print $1}')"
     for pkg in ${PKGS}; do
         # Many commands are already available on CI runners (like `jq` and
         # `yq`) and are sometimes not installed using deb packages (like `yq`).
@@ -330,19 +330,19 @@ install_snapd() (
 hasNeededAPIExtension() (
     { set +x; } 2>/dev/null
 
-    needed_extension="${1}"
+    local needed_extension="${1}"
 
     lxc info | grep -qxFm1 -- "- ${needed_extension}"
 )
 
 # runsMinimumKernel: check if the running kernel is at least the minimum version.
 runsMinimumKernel() (
-    min_version="${1}"
-    min_major="$(echo "${min_version}" | cut -d. -f1)"
-    min_minor="$(echo "${min_version}" | cut -d. -f2)"
-    running_version="$(uname -r | cut -d. -f 1,2)"
-    running_major="$(echo "${running_version}" | cut -d. -f1)"
-    running_minor="$(echo "${running_version}" | cut -d. -f2)"
+    local min_version="${1}"
+    local min_major="$(echo "${min_version}" | cut -d. -f1)"
+    local min_minor="$(echo "${min_version}" | cut -d. -f2)"
+    local running_version="$(uname -r | cut -d. -f 1,2)"
+    local running_major="$(echo "${running_version}" | cut -d. -f1)"
+    local running_minor="$(echo "${running_version}" | cut -d. -f2)"
 
     if [ "${running_major}" -lt "${min_major}" ]; then
         return 1
@@ -375,9 +375,9 @@ createPureStoragePool() (
 
 # createCertificateAndKey: creates a new key pair.
 createCertificateAndKey() (
-  key_file="${1}"
-  crt_file="${2}"
-  cn="${3}"
+  local key_file="${1}"
+  local crt_file="${2}"
+  local cn="${3}"
   openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:secp384r1 -sha384 -keyout "${key_file}" -nodes -out "${crt_file}" -days 1 -subj "/CN=${cn}"
 )
 
@@ -398,7 +398,7 @@ setup_swap() {
         return
     fi
 
-    SIZE="${1:-1G}"
+    local SIZE="${1:-1G}"
     LXD_CI_SWAPFILE="$(mktemp --tmpdir lxd-ci.swapfile.XXXXXXX)"
     fallocate -l "${SIZE}" "${LXD_CI_SWAPFILE}"
     chmod 0000 "${LXD_CI_SWAPFILE}"
