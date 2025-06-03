@@ -291,6 +291,21 @@ if has_cloud_init; then
             echo "===> FAIL: cloud-init reboot: ${name}"
             FAIL=1
         fi
+
+        # For VMs, check if growpart is available and verify if the rootfs was resized
+        if [ "${TYPE}" = "vm" ] && lxc exec "${name}" -- sh -c "command -v growpart" >/dev/null && lxc exec "${name}" -- df -m / > /dev/null 2>&1; then
+            ROOTFS_SIZE="$(lxc exec "${name}" -- df -m / | awk 'NR==2 {print $2}')"
+
+            # Check for greater than ~4GiB which is the initial default size from lxd-imagebuilder
+            if [ "${ROOTFS_SIZE}" -gt 4000 ]; then
+                echo "===> PASS: cloud-init growpart: ${name}"
+            else
+                echo "===> FAIL: cloud-init growpart: ${name}"
+                FAIL=1
+            fi
+        else
+            echo "===> SKIP: cloud-init growpart: ${name}"
+        fi
     done
 fi
 
