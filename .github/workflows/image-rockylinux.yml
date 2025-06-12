@@ -25,6 +25,7 @@ jobs:
         release:
           - 8
           - 9
+          - 10  # EOL: 2035-05-31
         variant:
           - default
           - cloud
