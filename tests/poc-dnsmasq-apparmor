@@ -1,0 +1,102 @@
+#!/bin/bash
+set -eux
+
+# PoC to test the dnsmasq AppArmor profile fix for AF_UNIX mediation on 6.17+ kernels.
+# Reproduces the "connect: permission denied" dqlite error seen in cluster tests.
+#
+# Usage:
+#   # With stock LXD snap:
+#   sudo ./bin/local-run tests/poc-dnsmasq-apparmor 6/edge
+#
+#   # With a patched lxd.debug binary, place it next to this script or pass its path:
+#   LXD_DEBUG=/path/to/lxd.debug sudo -E ./bin/local-run tests/poc-dnsmasq-apparmor 6/edge
+#
+#   # With a custom LXD snap (e.g. built with patched dqlite):
+#   LXD_SNAP=/path/to/lxd.snap sudo -E ./bin/local-run tests/poc-dnsmasq-apparmor 6/edge
+
+install_lxd
+
+# Configure LXD
+lxd init --auto --storage-backend btrfs --storage-create-loop 5
+
+IMAGE="${TEST_IMG:-ubuntu-minimal-daily:24.04}"
+
+echo "==> Host kernel: $(uname -r)"
+
+echo "==> Launching nested container"
+lxc launch "${IMAGE}" t1 -c security.nesting=true -c security.devlxd.images=true
+
+waitInstanceBooted t1
+
+echo "==> Installing LXD inside the container"
+lxc exec t1 -- snap install lxd --channel="${LXD_SNAP_CHANNEL}"
+
+# Optionally sideload a custom LXD snap (e.g. built with patched dqlite)
+if [ -n "${LXD_SNAP:-}" ] && [ -f "${LXD_SNAP}" ]; then
+    echo "==> Sideloading custom snap into the container"
+    lxc file push "${LXD_SNAP}" t1/root/lxd.snap
+    lxc exec t1 -- snap install --dangerous /root/lxd.snap
+    lxc exec t1 -- snap alias lxd.lxc lxc
+    lxc exec t1 -- rm /root/lxd.snap
+fi
+
+# Optionally sideload a patched lxd.debug binary
+if [ -n "${LXD_DEBUG:-}" ] && [ -f "${LXD_DEBUG}" ]; then
+    echo "==> Sideloading patched lxd.debug"
+    lxc file push "${LXD_DEBUG}" t1/var/snap/lxd/common/lxd.debug
+    lxc exec t1 -- chmod +x /var/snap/lxd/common/lxd.debug
+    lxc exec t1 -- snap restart lxd
+    lxc exec t1 -- lxd waitready --timeout=60
+fi
+
+dmesg -c > /dev/null
+
+echo "==> Initializing LXD with bridge network and clustering"
+MEMBER_IP="$(lxc exec t1 -- ip -4 addr show dev eth0 scope global | grep inet | cut -d' ' -f6 | cut -d/ -f1)"
+
+lxc exec t1 -- lxd init --preseed <<EOF
+config:
+  core.https_address: ${MEMBER_IP}:8443
+  cluster.https_address: ${MEMBER_IP}:8443
+networks:
+- name: lxdbr0
+  type: bridge
+storage_pools:
+- name: default
+  driver: dir
+profiles:
+- name: default
+  devices:
+    root:
+      path: /
+      pool: default
+      type: disk
+    eth0:
+      name: eth0
+      network: lxdbr0
+      type: nic
+cluster:
+  server_name: t1
+  enabled: true
+EOF
+
+echo "==> Checking for AppArmor denials (before)"
+dmesg | grep -c 'apparmor="DENIED".*dnsmasq' || true
+
+echo "==> Triggering dqlite activity via cluster API"
+# This forces LXD to use dqlite which will hit the abstract unix socket
+lxc exec t1 -- lxc cluster list
+lxc exec t1 -- lxc query /1.0/cluster/members
+
+echo "==> Checking for AppArmor denials (after)"
+DENIALS="$(dmesg | grep 'apparmor="DENIED".*dnsmasq.*unix' || true)"
+if [ -n "${DENIALS}" ]; then
+    echo "FAIL: AppArmor denials found for dnsmasq unix socket access:"
+    echo "${DENIALS}"
+    exit 1
+fi
+
+echo "PASS: No dnsmasq AppArmor unix socket denials detected"
+
+echo "==> Cleanup"
+lxc delete -f t1
