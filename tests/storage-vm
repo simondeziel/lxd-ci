@@ -187,7 +187,9 @@ for poolDriver in $poolDriverList; do
         lxc remote add localhost "${token}"
 
         echo "==> Checking VM can be migrated with snapshots (same storage pool)"
+        dmesg -c
         lxc copy v1 localhost:v2 --stateless
+        dmesg -c
         lxc query /1.0/instances/v2?recursion=1 | jq --exit-status '.snapshots | length == 1'
         lxc start v2
         waitInstanceReady v2
